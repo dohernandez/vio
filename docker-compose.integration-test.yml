@@ -1,0 +1,40 @@
+version: '2.4' # Version 2 allows health checking outside of docker stack.
+services:
+  database-migrate:
+    image: migrate/migrate
+    container_name: kittemplate-database-migrate
+    volumes:
+      - ./resources/migrations:/resources/migrations
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: on-failure
+    command:
+      - "-database"
+      - "postgres://kittemplate:kittemplate@database:5432/kittemplate?sslmode=disable"
+      - "-path"
+      - "/resources/migrations"
+      - "up"
+    healthcheck:
+      test: exit 0
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 10s
+
+  database:
+    image: postgres:13.1-alpine
+    container_name: kittemplate-database
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: kittemplate
+      POSTGRES_USER: kittemplate
+      POSTGRES_DB: kittemplate
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 2s
+      timeout: 20s
+      retries: 5
+      start_period: 3s

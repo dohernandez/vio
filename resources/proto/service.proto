@@ -1,0 +1,188 @@
+syntax = "proto3";
+
+option go_package = "github.com/dohernandez/kit-template/pkg/api";
+
+package kit.template;
+
+import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "kit-template"
+    version: "1.0"
+    description: "Short description of the service"
+  }
+  schemes: HTTP;
+  consumes: "application/json"
+  produces: "application/json"
+  /*
+  responses: {
+    key: "400"
+    value: {
+      description: "Short description of the general 400 error.";
+      schema: {
+        json_schema: {
+          ref: ".google.rpc.Status"
+        }
+      }
+    }
+  }
+  */
+};
+
+// The API manages ... .
+service KitTemplateService {
+/*
+  // PostFuncName ... .
+  //
+  // Receives a request with ... . Responses ... .
+  rpc PostFuncName(PostFuncRequest) returns (PostFuncResponse) {
+    // Client example (Assuming the service is hosted at the given 'DOMAIN_NAME'):
+    // Client example:
+    //   curl -d '{}' http://DOMAIN_NAME/v1/resource/name
+    option (google.api.http) = {
+      post : "/v1/resource/name"
+      body : "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      responses: {
+        key: "200"
+        value: {
+          examples: {
+            key: "application/json"
+            value: '{}'
+          }
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "An unexpected error response."
+          schema: {
+            json_schema: {
+              ref: ".google.rpc.Status"
+            }
+          }
+        }
+      }
+    };
+  }
+
+  // GetFuncName.
+  //
+  // Receives a request with ... . Responses ... .
+  rpc GetFuncName(GetFuncRequest) returns (GetFuncResponse) {
+    // Client example (Assuming the service is hosted at the given 'DOMAIN_NAME'):
+    // Client example:
+    //   curl http://DOMAIN_NAME/resource/name
+    option (google.api.http) = {
+      get : "/v1/resource/name"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      responses: {
+        key: "200"
+        value: {
+          examples: {
+            key: "application/json"
+            value: '{}'
+          }
+          schema: {
+            json_schema: {
+              ref: ".kit.template.GetFuncNameResponse"
+            }
+          }
+        }
+      }
+      responses: {
+        key: "404"
+        value: {
+          description: "Not found response."
+          schema: {
+            json_schema: {
+              ref: ".google.rpc.Status"
+            }
+          }
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "An unexpected error response."
+          schema: {
+            json_schema: {
+              ref: ".google.rpc.Status"
+            }
+          }
+        }
+      }
+    };
+  }
+}
+
+message PostFuncRequest {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "PostFuncRequest"
+      description: "Request message to ... ."
+      required: []
+    }
+  };
+
+  // ... .
+  string postParam1 = 1;
+  // ... .
+  uint64 postParam2 = 2;
+  // ... .
+  repeated string postParam3 = 3;
+}
+
+message PostFuncResponse {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "PostFuncResponse"
+      description: "Response message from ... ."
+      required: []
+    }
+  };
+  // ... .
+  string responseValue1 = 1;
+}
+
+message GetFuncRequest {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "GetFuncRequest"
+      description: "Request message to ... ."
+      required: []
+    }
+  };
+  // Leaderboard ID.
+  string leaderboard_uuid = 1;
+}
+
+message GetFuncResponse {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "GetFuncResponse"
+      description: "Response message from ... ."
+    }
+  };
+
+  // rows
+  repeated RepeatedRow rows = 1;
+
+  message RepeatedRow {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+      json_schema: {
+        title: "RepeatedRow"
+        description: "... ."
+      }
+    };
+    // ... .
+    string responseValue1 = 1;
+    // ... .
+    int64 responseValue2 = 2;
+  }
+*/
+}

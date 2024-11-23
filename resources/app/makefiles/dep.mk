@@ -29,9 +29,15 @@ envfile:
 
 ## Run application with CompileDaemon (automatic rebuild on code change)
 run-compile-daemon:
-	@test -s $(shell $(GO) env GOPATH)/bin/CompileDaemon || (echo ">> installing CompileDaemon" && $(GO) get -u github.com/githubnemo/CompileDaemon)
+	@test -s $(shell $(GO) env GOPATH)/bin/CompileDaemon || (echo ">> installing CompileDaemon" && GOFLAGS= $(GO) install github.com/githubnemo/CompileDaemon@latest)
 	@echo ">> running app with CompileDaemon"
-	@$(shell $(GO) env GOPATH)/bin/CompileDaemon -exclude-dir=vendor -build='make build migrate' -command='$(BUILD_DIR)/$(BINARY_NAME)' -graceful-kill
+	$(shell $(GO) env GOPATH)/bin/CompileDaemon -exclude-dir=vendor -build="make build" -command="$(BUILD_DIR)/$(BINARY_NAME)" -graceful-kill
+
+
+
+
+
+
 
 
 .PHONY: deps env envfile run-compile-daemon

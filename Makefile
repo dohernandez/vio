@@ -17,6 +17,10 @@ ifneq "$(wildcard ./vendor )" ""
   ifneq "$(wildcard ./vendor/github.com/bool64/dev)" ""
   	DEVGO_PATH := ./vendor/github.com/bool64/dev
   endif
+  # adding github.com/dohernandez/dev-grpc
+  ifneq "$(wildcard ./vendor/github.com/dohernandez/dev-grpc)" ""
+  	DEVGRPCGO_PATH := ./vendor/github.com/dohernandez/dev-grpc
+  endif
 endif
 
 ifeq ($(DEVGO_PATH),)
@@ -24,6 +28,15 @@ ifeq ($(DEVGO_PATH),)
 	ifeq ($(DEVGO_PATH),)
     	$(info Module github.com/bool64/dev not found, downloading.)
     	DEVGO_PATH := $(shell export GO111MODULE=on && $(GO) get github.com/bool64/dev && $(GO) list -f '{{.Dir}}' -m github.com/bool64/dev)
+	endif
+endif
+
+# defining DEVGRPCGO_PATH
+ifeq ($(DEVGRPCGO_PATH),)
+	DEVGRPCGO_PATH := $(shell GO111MODULE=on $(GO) list ${modVendor} -f '{{.Dir}}' -m github.com/bool64/dev)
+	ifeq ($(DEVGRPCGO_PATH),)
+    	$(info Module github.com/dohernandez/dev-grpc not found, downloading.)
+    	DEVGRPCGO_PATH := $(shell export GO111MODULE=on && $(GO) get github.com/dohernandez/dev-grpc && $(GO) list -f '{{.Dir}}' -m github.com/dohernandez/dev-grpc)
 	endif
 endif
 
@@ -37,7 +50,7 @@ endif
 
 # Add your custom targets here.
 BUILD_LDFLAGS="-s -w"
-BUILD_PKG = ./cmd/kit-template
+BUILD_PKG = ./cmd/vio
 INTEGRATION_DOCKER_COMPOSE = ./docker-compose.integration-test.yml
 
 APP_PATH = $(shell pwd)
@@ -48,14 +61,13 @@ SWAGGER_PATH = $(APP_PATH)/resources/swagger
 
 -include $(APP_PATH)/resources/app/makefiles/database.mk
 -include $(APP_PATH)/resources/app/makefiles/dep.mk
--include $(APP_PATH)/resources/app/makefiles/protoc.mk
+-include $(DEVGRPCGO_PATH)/makefiles/protoc.mk
 
 ## Run tests
 test: test-unit test-integration
 
 ## Generate code from proto file(s)
-proto-gen-code: protoc-cli
-	protoc --proto_path=$(SRC_PROTO_PATH) $(SRC_PROTO_PATH)/*.proto  --go_opt=paths=source_relative --go_out=:$(GO_PROTO_PATH) --go-grpc_opt=paths=source_relative --go-grpc_out=:$(GO_PROTO_PATH) --grpc-gateway_opt=paths=source_relative --grpc-gateway_out=:$(GO_PROTO_PATH) --openapiv2_out=:$(SWAGGER_PATH)
+proto-gen: proto-gen-code-swagger
 	@cat $(SWAGGER_PATH)/service.swagger.json | jq del\(.paths[][].responses.'"default"'\) > $(SWAGGER_PATH)/service.swagger.json.tmp
 	@mv $(SWAGGER_PATH)/service.swagger.json.tmp $(SWAGGER_PATH)/service.swagger.json
 

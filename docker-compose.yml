@@ -1,10 +1,9 @@
-version: '3.9'
 services:
   app:
     build:
       context: .
       dockerfile: resources/docker/dev/Dockerfile
-    container_name: kittemplate-app
+    container_name: vio-app
     env_file:
       - .env
     ports:
@@ -12,41 +11,41 @@ services:
       - "8080:8080"
       - "8010:8010"
     volumes:
-      - .:/go/src/github.com/dohernandez/kit-template
+      - .:/go/src/github.com/dohernandez/vio
       - /tmp/go-build:/root/.cache/go-build
-    depends_on:
-      database:
-        condition: service_healthy
+#    depends_on:
+#      database:
+#        condition: service_healthy
 
-  database-migrate:
-    image: migrate/migrate
-    container_name: kittemplate-database-migrate
-    volumes:
-      - ./resources/migrations:/resources/migrations
-    depends_on:
-      database:
-        condition: service_healthy
-    restart: on-failure
-    command:
-      - "-database"
-      - "postgres://kittemplate:kittemplate@database:5432/kittemplate?sslmode=disable"
-      - "-path"
-      - "/resources/migrations"
-      - "up"
-
-  database:
-    image: postgres:13.1-alpine
-    container_name: kittemplate-database
-    restart: always
-    environment:
-      POSTGRES_PASSWORD: kittemplate
-      POSTGRES_USER: kittemplate
-      POSTGRES_DB: kittemplate
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 2s
-      timeout: 20s
-      retries: 5
-      start_period: 3s
+#  database-migrate:
+#    image: migrate/migrate
+#    container_name: vio-database-migrate
+#    volumes:
+#      - ./resources/migrations:/resources/migrations
+#    depends_on:
+#      database:
+#        condition: service_healthy
+#    restart: on-failure
+#    command:
+#      - "-database"
+#      - "postgres://vio:vio@database:5432/vio?sslmode=disable"
+#      - "-path"
+#      - "/resources/migrations"
+#      - "up"
+#
+#  database:
+#    image: postgres:13.1-alpine
+#    container_name: vio-database
+#    restart: always
+#    environment:
+#      POSTGRES_PASSWORD: vio
+#      POSTGRES_USER: vio
+#      POSTGRES_DB: vio
+#    ports:
+#      - "5432:5432"
+#    healthcheck:
+#      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+#      interval: 2s
+#      timeout: 20s
+#      retries: 5
+#      start_period: 3s

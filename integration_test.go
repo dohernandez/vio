@@ -1,4 +1,4 @@
-package kit_template_test
+package vio_test
 
 import (
 	"context"
@@ -6,20 +6,20 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/bool64/ctxd"
 	"github.com/bool64/dbdog"
 	"github.com/bool64/httpdog"
 	"github.com/bool64/sqluct"
 	"github.com/cucumber/godog"
-	"github.com/dohernandez/kit-template/internal/platform/app"
-	"github.com/dohernandez/kit-template/internal/platform/config"
-	grpcRest "github.com/dohernandez/kit-template/pkg/grpc/rest"
-	grpcServer "github.com/dohernandez/kit-template/pkg/grpc/server"
-	"github.com/dohernandez/kit-template/pkg/must"
-	"github.com/dohernandez/kit-template/pkg/servicing"
-	"github.com/dohernandez/kit-template/pkg/test/feature"
-	dbdogcleaner "github.com/dohernandez/kit-template/pkg/test/feature/database"
+	"github.com/dohernandez/goservicing"
+	"github.com/dohernandez/servers"
+	"github.com/dohernandez/vio/internal/platform/app"
+	"github.com/dohernandez/vio/internal/platform/config"
+	"github.com/dohernandez/vio/pkg/must"
+	"github.com/dohernandez/vio/pkg/test/feature"
+	//dbdogcleaner "github.com/dohernandez/vio/pkg/test/feature/database"
 	"github.com/nhatthm/clockdog"
 )
 
@@ -41,74 +41,59 @@ func TestIntegration(t *testing.T) {
 
 	clock := clockdog.New()
 
-	deps, err := app.NewServiceLocator(cfg, func(l *app.Locator) {
-		l.ClockProvider = clock
-	})
-	must.NotFail(ctxd.WrapError(ctx, err, "failed to init service locator"))
-
-	dbm := initDBManager(deps.Storage)
-	dbmCleaner := initDBMCleaner(dbm)
-
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.AppGRPCPort))
 	must.NotFail(ctxd.WrapError(ctx, err, "failed to init GRPC service listener"))
-
-	srvGRPC := grpcServer.InitGRPCService(
-		ctx,
-		grpcServer.InitGRPCServiceConfig{
-			Listener:       grpcListener,
-			Service:        deps.KitTemplateService,
-			Logger:         deps.ZapLogger(),
-			UInterceptor:   deps.GRPCUnitaryInterceptors,
-			WithReflective: cfg.IsDev(),
-			Options: []grpcServer.Option{
-				grpcServer.WithAddrAssigned(),
-			},
-		},
-	)
 
 	restTListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.AppRESTPort))
 	must.NotFail(ctxd.WrapError(ctx, err, "failed to init REST service listener"))
 
-	srvREST, err := grpcRest.InitRESTService(
-		ctx,
-		grpcRest.InitRESTServiceConfig{
-			Listener:         restTListener,
-			Service:          deps.KitTemplateRESTService,
-			UInterceptor:     deps.GRPCUnitaryInterceptors,
-			Handlers:         deps.Handlers,
-			ResponseModifier: deps.ResponseModifier,
-			Options: []grpcRest.Option{
-				grpcRest.WithAddrAssigned(),
-			},
+	deps, err := app.NewServiceLocator(
+		cfg,
+		func(l *app.Locator) {
+			l.ClockProvider = clock
 		},
+		app.WithGRPCOptions(
+			servers.WithAddrAssigned(),
+			servers.WithReflection(),
+			servers.WithListener(grpcListener, true),
+		),
+		app.WithGRPCRestOptions(
+			servers.WithAddrAssigned(),
+			servers.WithListener(restTListener, true),
+		),
 	)
-	must.NotFail(ctxd.WrapError(ctx, err, "failed to init REST service"))
+	must.NotFail(ctxd.WrapError(ctx, err, "failed to init service locator"))
 
-	services := servicing.WithGracefulSutDown(
+	//dbm := initDBManager(deps.Storage)
+	//dbmCleaner := initDBMCleaner(dbm)
+
+	services := goservicing.WithGracefulShutDown(
 		func(ctx context.Context) {
 			app.GracefulDBShutdown(ctx, deps)
 		},
 	)
 
 	go func() {
-		err = services.Start(ctx,
+		err = services.Start(
+			ctx,
+			time.Second*5,
 			func(ctx context.Context, msg string) {
 				deps.CtxdLogger().Important(ctx, msg)
 			},
-			srvGRPC,
-			srvREST,
+			deps.VioService,
+			deps.VioRESTService,
 		)
 		must.NotFail(ctxd.WrapError(ctx, err, "failed to start the services"))
 	}()
 
-	baseRESTURL := <-srvREST.AddrAssigned
+	baseRESTURL := <-deps.VioRESTService.AddrAssigned
 	local := httpdog.NewLocal(baseRESTURL)
 
 	feature.RunFeatures(t, "features", func(_ *testing.T, s *godog.ScenarioContext) {
 		local.RegisterSteps(s)
 
-		dbm.RegisterSteps(s)
-		dbmCleaner.RegisterSteps(s)
+		//dbm.RegisterSteps(s)
+		//dbmCleaner.RegisterSteps(s)
 
 		clock.RegisterContext(s)
 	})
@@ -126,7 +111,7 @@ func initDBManager(storage *sqluct.Storage) *dbdog.Manager {
 	dbm.Instances = map[string]dbdog.Instance{
 		"postgres": {
 			Storage: storage,
-			Tables:  map[string]interface{}{
+			Tables: map[string]interface{}{
 				// "table_name":  new(model.TableModel),
 			},
 			PostCleanup: map[string][]string{
@@ -138,8 +123,8 @@ func initDBManager(storage *sqluct.Storage) *dbdog.Manager {
 	return &dbm
 }
 
-func initDBMCleaner(dbm *dbdog.Manager) *dbdogcleaner.ManagerCleaner {
-	return &dbdogcleaner.ManagerCleaner{
-		Manager: dbm,
-	}
-}
+//func initDBMCleaner(dbm *dbdog.Manager) *dbdogcleaner.ManagerCleaner {
+//	return &dbdogcleaner.ManagerCleaner{
+//		Manager: dbm,
+//	}
+//}

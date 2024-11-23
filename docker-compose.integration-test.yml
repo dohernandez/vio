@@ -1,8 +1,7 @@
-version: '2.4' # Version 2 allows health checking outside of docker stack.
 services:
   database-migrate:
     image: migrate/migrate
-    container_name: kittemplate-database-migrate
+    container_name: vio-database-migrate
     volumes:
       - ./resources/migrations:/resources/migrations
     depends_on:
@@ -11,7 +10,7 @@ services:
     restart: on-failure
     command:
       - "-database"
-      - "postgres://kittemplate:kittemplate@database:5432/kittemplate?sslmode=disable"
+      - "postgres://vio:vio@database:5432/vio?sslmode=disable"
       - "-path"
       - "/resources/migrations"
       - "up"
@@ -24,12 +23,12 @@ services:
 
   database:
     image: postgres:13.1-alpine
-    container_name: kittemplate-database
+    container_name: vio-database
     restart: always
     environment:
-      POSTGRES_PASSWORD: kittemplate
-      POSTGRES_USER: kittemplate
-      POSTGRES_DB: kittemplate
+      POSTGRES_PASSWORD: vio
+      POSTGRES_USER: vio
+      POSTGRES_DB: vio
     ports:
       - "5432:5432"
     healthcheck:

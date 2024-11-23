@@ -1,5 +1,5 @@
-FROM golang:1.17.3
+FROM golang:1.23.3
 
-WORKDIR /go/src/github.com/dohernandez/kit-template
+WORKDIR /go/src/github.com/dohernandez/vio
 
 CMD make run-compile-daemon

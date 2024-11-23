@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dohernandez/kit-template/internal/platform/config"
+	"github.com/dohernandez/vio/internal/platform/config"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 )

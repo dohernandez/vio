@@ -12,7 +12,10 @@ import (
 	"github.com/bool64/sqluct"
 	"github.com/bool64/zapctxd"
 	"github.com/dohernandez/servers"
+	"github.com/dohernandez/vio/internal/domain/usecase"
 	"github.com/dohernandez/vio/internal/platform/config"
+	"github.com/dohernandez/vio/internal/platform/service"
+	"github.com/dohernandez/vio/internal/platform/storage"
 	"github.com/dohernandez/vio/resources/swagger"
 	grpcLogging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpcRecovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -85,7 +88,15 @@ type Locator struct {
 	restHandlers            map[string]http.Handler
 	grpcUnitaryInterceptors []grpc.UnaryServerInterceptor
 
+	VioService        *service.VioService
+	VioRESTService    *service.VioRESTService
 	VioMetricsService *servers.Metrics
+
+	// storage
+	geoRepo *storage.Geolocation
+
+	// use cases
+	geolocationByIP *usecase.GeolocationByIPExposer
 }
 
 // NewServiceLocator creates application locator.
@@ -116,6 +127,12 @@ func NewServiceLocator(cfg *config.Config, opts ...Option) (*Locator, error) {
 	}
 
 	l.Storage = makeStorage(l.DBx, l.CtxdLogger())
+
+	// setting up storage deps
+	l.setupStorage()
+
+	// setting up use cases dependencies
+	l.setupUsecaseDependencies()
 
 	// setting up services
 	if !l.opts.enableService {
@@ -220,6 +237,14 @@ func makeStorage(
 	return st
 }
 
+func (l *Locator) setupStorage() {
+	l.geoRepo = storage.NewGeolocation(l.Storage)
+}
+
+func (l *Locator) setupUsecaseDependencies() {
+	l.geolocationByIP = usecase.NewGeolocationByIPExposer(l.geoRepo)
+}
+
 func (l *Locator) setGRPCUnitaryInterceptors() {
 	l.grpcUnitaryInterceptors = append(l.grpcUnitaryInterceptors, []grpc.UnaryServerInterceptor{
 		// recovering from panic
@@ -250,6 +275,18 @@ func (l *Locator) setupServices() error {
 		grpc_prometheus.EnableHandlingTimeHistogram()
 	}
 
+	l.VioService = service.NewVioService(
+		service.VioServiceConfig{
+			Config: servers.Config{
+				Name: "grpc " + l.Config.ServiceName,
+			},
+		},
+		l.geolocationByIP,
+		grpcOpts...,
+	)
+
+	var err error
+
 	grpcRestOpts := append(
 		[]servers.Option{},
 		l.opts.grpcRestOpts...,
@@ -259,6 +296,19 @@ func (l *Locator) setupServices() error {
 		grpcRestOpts,
 		servers.WithHandlers(l.restHandlers),
 	)
+
+	l.VioRESTService, err = service.NewVioRESTService(
+		service.VioRESTServiceConfig{
+			Config: servers.Config{
+				Name: "grpc rest " + l.Config.ServiceName,
+			},
+			GRPCAddr: l.VioService.Addr(),
+		},
+		grpcRestOpts...,
+	)
+	if err != nil {
+		return err
+	}
 
 	// Check if metrics service is enabled.
 	if !l.opts.enableMetrics {
@@ -272,6 +322,7 @@ func (l *Locator) setupServices() error {
 
 	metricsOpts = append(
 		metricsOpts,
+		servers.WithGRPCServer(l.VioService.GRPC),
 	)
 
 	l.VioMetricsService = servers.NewMetrics(
@@ -300,4 +351,9 @@ func grpcInterceptorLogger(l *zapctxd.Logger) grpcLogging.Logger {
 			panic(fmt.Sprintf("unknown level %v", lvl))
 		}
 	})
+}
+
+// GeoStorage returns geolocation data storage.
+func (l *Locator) GeoStorage() usecase.GeolocationDataStorage {
+	return l.geoRepo
 }

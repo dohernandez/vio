@@ -7,7 +7,7 @@ on:
       old:
         description: 'Old Ref'
         required: false
-        default: 'master'
+        default: 'main'
       new:
         description: 'New Ref'
         required: true
@@ -72,7 +72,6 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            bench-master.txt
             bench-main.txt
           # Use base sha for PR or new commit hash for master/main push in benchmark result key.
           key: ${{ runner.os }}-bench-${{ (github.event.pull_request.base.sha != github.event.after) && github.event.pull_request.base.sha || github.event.after }}
@@ -91,10 +90,10 @@ jobs:
       - name: Run benchmark for base code
         if: env.RUN_BASE_BENCHMARK == 'on' && steps.base-benchmark.outputs.cache-hit != 'true' && (github.event.pull_request.base.sha != '' || github.event.inputs.old != '')
         run: |
-          git fetch origin master ${{ github.event.pull_request.base.sha }}
+          git fetch origin main ${{ github.event.pull_request.base.sha }}
           HEAD=$(git rev-parse HEAD)
           git reset --hard ${{ github.event.pull_request.base.sha }}
-          export REF_NAME=master
+          export REF_NAME=main
           make bench-run bench-stat
           git reset --hard $HEAD
 

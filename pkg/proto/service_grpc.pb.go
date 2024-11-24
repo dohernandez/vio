@@ -19,17 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	VioService_SayHello_FullMethodName = "/api.vio.VioService/SayHello"
+	VioService_GeolocationByIPExposer_FullMethodName = "/api.vio.VioService/GeolocationByIPExposer"
 )
 
 // VioServiceClient is the client API for VioService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// The API manages ... .
+// The API Vio manage geolocation data.
 type VioServiceClient interface {
-	// Sends a greeting
-	SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error)
+	// GeolocationByIPExposer expose the geolocation data by IP.
+	//
+	// Receives a request with the ip. Responses with the geolocation data otherwise not.
+	GeolocationByIPExposer(ctx context.Context, in *GeolocationByIPExposerRequest, opts ...grpc.CallOption) (*GeolocationByIPExposerResponse, error)
 }
 
 type vioServiceClient struct {
@@ -40,10 +42,10 @@ func NewVioServiceClient(cc grpc.ClientConnInterface) VioServiceClient {
 	return &vioServiceClient{cc}
 }
 
-func (c *vioServiceClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
+func (c *vioServiceClient) GeolocationByIPExposer(ctx context.Context, in *GeolocationByIPExposerRequest, opts ...grpc.CallOption) (*GeolocationByIPExposerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HelloReply)
-	err := c.cc.Invoke(ctx, VioService_SayHello_FullMethodName, in, out, cOpts...)
+	out := new(GeolocationByIPExposerResponse)
+	err := c.cc.Invoke(ctx, VioService_GeolocationByIPExposer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,10 +56,12 @@ func (c *vioServiceClient) SayHello(ctx context.Context, in *HelloRequest, opts 
 // All implementations must embed UnimplementedVioServiceServer
 // for forward compatibility.
 //
-// The API manages ... .
+// The API Vio manage geolocation data.
 type VioServiceServer interface {
-	// Sends a greeting
-	SayHello(context.Context, *HelloRequest) (*HelloReply, error)
+	// GeolocationByIPExposer expose the geolocation data by IP.
+	//
+	// Receives a request with the ip. Responses with the geolocation data otherwise not.
+	GeolocationByIPExposer(context.Context, *GeolocationByIPExposerRequest) (*GeolocationByIPExposerResponse, error)
 	mustEmbedUnimplementedVioServiceServer()
 }
 
@@ -68,8 +72,8 @@ type VioServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedVioServiceServer struct{}
 
-func (UnimplementedVioServiceServer) SayHello(context.Context, *HelloRequest) (*HelloReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
+func (UnimplementedVioServiceServer) GeolocationByIPExposer(context.Context, *GeolocationByIPExposerRequest) (*GeolocationByIPExposerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GeolocationByIPExposer not implemented")
 }
 func (UnimplementedVioServiceServer) mustEmbedUnimplementedVioServiceServer() {}
 func (UnimplementedVioServiceServer) testEmbeddedByValue()                    {}
@@ -92,20 +96,20 @@ func RegisterVioServiceServer(s grpc.ServiceRegistrar, srv VioServiceServer) {
 	s.RegisterService(&VioService_ServiceDesc, srv)
 }
 
-func _VioService_SayHello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HelloRequest)
+func _VioService_GeolocationByIPExposer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GeolocationByIPExposerRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VioServiceServer).SayHello(ctx, in)
+		return srv.(VioServiceServer).GeolocationByIPExposer(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VioService_SayHello_FullMethodName,
+		FullMethod: VioService_GeolocationByIPExposer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VioServiceServer).SayHello(ctx, req.(*HelloRequest))
+		return srv.(VioServiceServer).GeolocationByIPExposer(ctx, req.(*GeolocationByIPExposerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -118,8 +122,8 @@ var VioService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*VioServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "SayHello",
-			Handler:    _VioService_SayHello_Handler,
+			MethodName: "GeolocationByIPExposer",
+			Handler:    _VioService_GeolocationByIPExposer_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -8,6 +8,8 @@ linters-settings:
     check-blank: true
   gocyclo:
     min-complexity: 20
+  cyclop:
+    max-complexity: 20
   dupl:
     threshold: 100
   misspell:
@@ -23,22 +25,28 @@ linters:
   enable-all: true
   disable:
     - lll
-    - maligned
     - gochecknoglobals
     - gomnd
     - wrapcheck
     - paralleltest
     - forbidigo
-    - exhaustivestruct
-    - interfacer # deprecated
     - forcetypeassert
-    - scopelint # deprecated
-    - ifshort # too many false positives
-    - golint # deprecated
     - varnamelen
     - tagliatelle
     - errname
     - ireturn
+    - testpackage
+    - exhaustruct
+    - rowserrcheck # disabled because of generics. You can track the evolution of the generics support by following the https://github.com/golangci/golangci-lint/issues/2649.
+    - sqlclosecheck # disabled because of generics. You can track the evolution of the generics support by following the https://github.com/golangci/golangci-lint/issues/2649.
+    - wastedassign # disabled because of generics. You can track the evolution of the generics support by following the https://github.com/golangci/golangci-lint/issues/2649.
+    - tagalign
+    - depguard
+    - err113
+    - mnd
+    - execinquery # deprecated
+    - exportloopref # deprecated
+    - tenv # can't be used in with t.Parallel()
 
 issues:
   exclude-use-default: false

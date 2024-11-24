@@ -22,7 +22,7 @@ services:
       timeout: 10s
 
   database:
-    image: postgres:13.1-alpine
+    image: postgres:17.2-alpine
     container_name: vio-database
     restart: always
     environment:

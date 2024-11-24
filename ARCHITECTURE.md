@@ -1,8 +1,8 @@
 # Vio Architecture
 
-* Latest update: 2021-11-19
+* Latest update: 2024-11-24
 
-<!-- Short description of the service -->
+Vio service parses geolocation data from the given data sources database, validate the data before inserting into a database using Go. Its extract, normalize, and store it in the database. Also provide and API endpoint for data visualization.
 
 ## Overview
 
@@ -10,7 +10,7 @@
 
 ### Storage
 
-The service makes use of its own private **PostgreSQL** database essentially to store the data necessary for the service to work, like ... .
+The service makes use of its own private **PostgreSQL** database essentially to store the geolocation data.
 
 ## Package Structure
 
@@ -23,17 +23,23 @@ The service makes use of its own private **PostgreSQL** database essentially to 
 │   │   ├── usecase # contains application's use cases.
 │   ├── platform
 |   │   ├── app # initializes the application locator.
+|   │   ├── cli # contains cli implementation.
 │   │   ├── config # contains application configuration.
-│   │   ├── service # contains grpc service implementations.
+│   │   ├── helpers # contains functions to reduce the code and facilitate the testing.
+│   │   ├── service # contains grpc, rest and services implementations.
+│   │   ├── reader # contains usecase reader implementations.
 │   |   ├── storage # contains usecase storage implementations.
 ├── pkg # MUST NOT import internal packages. Packages placed here should be considered as vendor.
 ├── resources # RECOMMENDED service resources. Shell helper scripts, additional files required for development, documentations.
+|   |── adr # contains architecture decision records.
 |   |── app
 │       ├── makefiles # contains Makefile modules.
 │       ├── scripts # contains scripts use mainly in makefile functionalities.
+|	|── architecture # contains architecture diagrams.
 |	|── docker # contains Dockerfile for dev
 |	|── migrations # contains migration files
 |	|── proto # contains proto definition of the service.
+|	|── sample_data # contains sample data for the development and testing.
 |	|── swagger # contains api documentation.
 ```
 

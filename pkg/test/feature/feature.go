@@ -61,7 +61,7 @@ func RunFeatures(t *testing.T, path string, featureContext func(t *testing.T, s 
 	godogx.RegisterPrettyFailedFormatter()
 
 	if opt.Randomize == 0 {
-		opt.Randomize = rand.Int63() // nolint: gosec
+		opt.Randomize = rand.Int63() //nolint:gosec
 	}
 
 	if opt.Format == "" {

@@ -28,9 +28,10 @@ RUN groupadd -r vio && useradd --no-log-init -r -g vio vio
 USER sportbuf
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder --chown=vio:vio /go/src/github.com/dohernandez/vio/bin/viod /bin/viod
 COPY --from=builder --chown=vio:vio /go/src/github.com/dohernandez/vio/bin/vio /bin/vio
 COPY --from=builder --chown=vio:vio /go/src/github.com/dohernandez/vio/resources/migrations /resources/migrations
 COPY --from=builder --chown=vio:vio /bin/migrate /bin/migrate
 
 EXPOSE 8000 8080 8010
-ENTRYPOINT ["vio"]
+ENTRYPOINT ["viod"]

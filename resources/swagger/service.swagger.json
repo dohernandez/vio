@@ -2,7 +2,7 @@
   "swagger": "2.0",
   "info": {
     "title": "vio",
-    "description": "Short description of the service",
+    "description": "Geolocation service provider",
     "version": "1.0"
   },
   "tags": [
@@ -20,19 +20,26 @@
     "application/json"
   ],
   "paths": {
-    "/say/{name}": {
+    "/v1/geolocations/{ip}": {
       "get": {
-        "summary": "Sends a greeting",
-        "operationId": "VioService_SayHello",
+        "summary": "GeolocationByIPExposer expose the geolocation data by IP.",
+        "description": "Receives a request with the ip. Responses with the geolocation data otherwise not.",
+        "operationId": "VioService_GeolocationByIPExposer",
         "responses": {
           "200": {
-            "description": "A successful response",
+            "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/vioHelloReply"
+              "$ref": "#/definitions/vioGeolocationByIPExposerResponse"
             },
             "examples": {
               "application/json": {
-                "message": "Hello Joe"
+                "ip_address": "200.106.141.15",
+                "country_code": "SI",
+                "country": "Nepal",
+                "city": "DuBuquemouth",
+                "latitude": -84.87503094689836,
+                "longitude": 7.206435933364332,
+                "mystery_value": 7823011346
               }
             }
           },
@@ -42,8 +49,8 @@
               "$ref": "#/definitions/rpcStatus"
             }
           },
-          "default": {
-            "description": "An unexpected error response.",
+          "500": {
+            "description": "Internal error.",
             "schema": {
               "$ref": "#/definitions/rpcStatus"
             }
@@ -51,8 +58,8 @@
         },
         "parameters": [
           {
-            "name": "name",
-            "description": "The name.",
+            "name": "ip",
+            "description": "IP of the geolocation data to expose.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -93,16 +100,43 @@
         }
       }
     },
-    "vioHelloReply": {
+    "vioGeolocationByIPExposerResponse": {
       "type": "object",
       "properties": {
-        "message": {
+        "ip_address": {
           "type": "string",
-          "description": "The greeting message."
+          "description": "IP address."
+        },
+        "country_code": {
+          "type": "string",
+          "description": "Country code."
+        },
+        "country": {
+          "type": "string",
+          "description": "Country."
+        },
+        "city": {
+          "type": "string",
+          "description": "City."
+        },
+        "latitude": {
+          "type": "number",
+          "format": "double",
+          "description": "Latitude."
+        },
+        "longitude": {
+          "type": "number",
+          "format": "double",
+          "description": "Longitude."
+        },
+        "mystery_value": {
+          "type": "number",
+          "format": "double",
+          "description": "Mystery value."
         }
       },
-      "description": "Response message hello.",
-      "title": "HelloReply"
+      "description": "Response message from the IP geolocation data.",
+      "title": "GeolocationByIPExposerResponse"
     }
   }
 }

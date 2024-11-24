@@ -4,9 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/dohernandez/servers"
-	"github.com/dohernandez/vio/resources/swagger"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"net/http"
 	"time"
 
@@ -14,24 +11,29 @@ import (
 	"github.com/bool64/ctxd"
 	"github.com/bool64/sqluct"
 	"github.com/bool64/zapctxd"
+	"github.com/dohernandez/servers"
+	"github.com/dohernandez/vio/internal/domain/usecase"
 	"github.com/dohernandez/vio/internal/platform/config"
 	"github.com/dohernandez/vio/internal/platform/service"
+	"github.com/dohernandez/vio/internal/platform/storage"
+	"github.com/dohernandez/vio/resources/swagger"
 	grpcLogging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpcRecovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-	_ "github.com/jackc/pgx/v5/stdlib" //nolint:gci // Postgres driver
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	_ "github.com/jackc/pgx/v5/stdlib" // Postgres driver
 	"github.com/jmoiron/sqlx"
 	"github.com/nhatthm/go-clock"
 	clockSrv "github.com/nhatthm/go-clock/service"
 	"github.com/opencensus-integrations/ocsql"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 const driver = "pgx"
 
 type locatorOptions struct {
-	grpcOpts     []servers.Option
-	grpcRestOpts []servers.Option
+	enableService bool
+	grpcOpts      []servers.Option
+	grpcRestOpts  []servers.Option
 
 	enableMetrics bool
 	metricsOpts   []servers.Option
@@ -39,6 +41,13 @@ type locatorOptions struct {
 
 // Option sets up service locator.
 type Option func(l *Locator)
+
+// WithNoService disables service.
+func WithNoService() Option {
+	return func(l *Locator) {
+		l.opts.enableService = false
+	}
+}
 
 // WithGRPCOptions sets up gRPC server options.
 func WithGRPCOptions(opts ...servers.Option) Option {
@@ -83,13 +92,20 @@ type Locator struct {
 	VioRESTService    *service.VioRESTService
 	VioMetricsService *servers.Metrics
 
+	// storage
+	geoRepo *storage.Geolocation
+
 	// use cases
+	geolocationByIP *usecase.GeolocationByIPExposer
 }
 
 // NewServiceLocator creates application locator.
 func NewServiceLocator(cfg *config.Config, opts ...Option) (*Locator, error) {
 	l := Locator{
-		Config:        cfg,
+		Config: cfg,
+		opts: locatorOptions{
+			enableService: true,
+		},
 		ClockProvider: clock.New(),
 	}
 
@@ -97,30 +113,36 @@ func NewServiceLocator(cfg *config.Config, opts ...Option) (*Locator, error) {
 		o(&l)
 	}
 
-	l.appendStandardHandlers(cfg.ServiceName)
-	//handler.SetResponseModifier(&l.Provider)
-
 	var err error
 
 	// logger stuff
 	l.setLogger()
 
 	// Database stuff.
-	//l.Config.PostgresDB.DriverName = driver
+	l.Config.PostgresDB.DriverName = driver
 	//
-	//l.DBx, err = makeDBx(cfg.PostgresDB)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//l.Storage = makeStorage(l.DBx, l.CtxdLogger())
+	l.DBx, err = makeDBx(cfg.PostgresDB)
+	if err != nil {
+		return nil, err
+	}
 
-	l.setGRPCUnitaryInterceptors()
+	l.Storage = makeStorage(l.DBx, l.CtxdLogger())
+
+	// setting up storage deps
+	l.setupStorage()
 
 	// setting up use cases dependencies
 	l.setupUsecaseDependencies()
 
 	// setting up services
+	if !l.opts.enableService {
+		return &l, nil
+	}
+
+	l.appendStandardHandlers(cfg.ServiceName)
+
+	l.setGRPCUnitaryInterceptors()
+
 	err = l.setupServices()
 	if err != nil {
 		return nil, err
@@ -215,6 +237,14 @@ func makeStorage(
 	return st
 }
 
+func (l *Locator) setupStorage() {
+	l.geoRepo = storage.NewGeolocation(l.Storage)
+}
+
+func (l *Locator) setupUsecaseDependencies() {
+	l.geolocationByIP = usecase.NewGeolocationByIPExposer(l.geoRepo)
+}
+
 func (l *Locator) setGRPCUnitaryInterceptors() {
 	l.grpcUnitaryInterceptors = append(l.grpcUnitaryInterceptors, []grpc.UnaryServerInterceptor{
 		// recovering from panic
@@ -223,12 +253,14 @@ func (l *Locator) setGRPCUnitaryInterceptors() {
 	}...)
 }
 
-func (l *Locator) setupUsecaseDependencies() {
-}
-
 func (l *Locator) setupServices() error {
 	grpcOpts := append(
-		l.opts.grpcOpts,
+		[]servers.Option{},
+		l.opts.grpcOpts...,
+	)
+
+	grpcOpts = append(
+		grpcOpts,
 		servers.WithChainUnaryInterceptor(l.grpcUnitaryInterceptors...),
 	)
 
@@ -249,13 +281,19 @@ func (l *Locator) setupServices() error {
 				Name: "grpc " + l.Config.ServiceName,
 			},
 		},
+		l.geolocationByIP,
 		grpcOpts...,
 	)
 
 	var err error
 
 	grpcRestOpts := append(
-		l.opts.grpcRestOpts,
+		[]servers.Option{},
+		l.opts.grpcRestOpts...,
+	)
+
+	grpcRestOpts = append(
+		grpcRestOpts,
 		servers.WithHandlers(l.restHandlers),
 	)
 
@@ -278,7 +316,12 @@ func (l *Locator) setupServices() error {
 	}
 
 	metricsOpts := append(
-		l.opts.metricsOpts,
+		[]servers.Option{},
+		l.opts.metricsOpts...,
+	)
+
+	metricsOpts = append(
+		metricsOpts,
 		servers.WithGRPCServer(l.VioService.GRPC),
 	)
 
@@ -294,25 +337,7 @@ func (l *Locator) setupServices() error {
 
 // grpcInterceptorLogger adapts zapctxd logger to interceptor logger.
 func grpcInterceptorLogger(l *zapctxd.Logger) grpcLogging.Logger {
-	return grpcLogging.LoggerFunc(func(ctx context.Context, lvl grpcLogging.Level, msg string, fields ...any) {
-		f := make([]zap.Field, 0, len(fields)/2)
-
-		for i := 0; i < len(fields); i += 2 {
-			key := fields[i]
-			value := fields[i+1]
-
-			switch v := value.(type) {
-			case string:
-				f = append(f, zap.String(key.(string), v))
-			case int:
-				f = append(f, zap.Int(key.(string), v))
-			case bool:
-				f = append(f, zap.Bool(key.(string), v))
-			default:
-				f = append(f, zap.Any(key.(string), v))
-			}
-		}
-
+	return grpcLogging.LoggerFunc(func(ctx context.Context, lvl grpcLogging.Level, msg string, _ ...any) {
 		switch lvl {
 		case grpcLogging.LevelDebug:
 			l.Debug(ctx, msg)
@@ -326,4 +351,9 @@ func grpcInterceptorLogger(l *zapctxd.Logger) grpcLogging.Logger {
 			panic(fmt.Sprintf("unknown level %v", lvl))
 		}
 	})
+}
+
+// GeoStorage returns geolocation data storage.
+func (l *Locator) GeoStorage() usecase.GeolocationDataStorage {
+	return l.geoRepo
 }

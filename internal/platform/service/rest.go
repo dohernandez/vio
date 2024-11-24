@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	"github.com/dohernandez/servers"
 	api "github.com/dohernandez/vio/pkg/proto"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -9,12 +10,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// VioRESTServiceConfig holds the configuration for rest service.
 type VioRESTServiceConfig struct {
 	servers.Config
 
 	GRPCAddr string
 }
 
+// VioRESTService is the rest service.
 type VioRESTService struct {
 	*servers.GRPCRest
 

@@ -1,12 +1,9 @@
-//go:build bench
-// +build bench
-
 package vio_test
 
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -17,14 +14,17 @@ import (
 	"github.com/bool64/httptestbench"
 	"github.com/dohernandez/goservicing"
 	"github.com/dohernandez/servers"
+	"github.com/dohernandez/vio/internal/domain/model"
 	"github.com/dohernandez/vio/internal/platform/app"
 	"github.com/dohernandez/vio/internal/platform/config"
+	"github.com/dohernandez/vio/internal/platform/helpers"
+	"github.com/dohernandez/vio/internal/platform/storage"
 	"github.com/dohernandez/vio/pkg/must"
 	"github.com/nhatthm/clockdog"
 	"github.com/valyala/fasthttp"
 )
 
-// nolint:gochecknoinits // Initializing resource for multiple benchmarks.
+//nolint:gochecknoinits // Initializing resource for multiple benchmarks.
 func init() {
 	ctx := context.Background()
 
@@ -35,7 +35,7 @@ func init() {
 	must.NotFail(ctxd.WrapError(ctx, err, "failed to load configurations"))
 
 	cfg.Environment = "test"
-	cfg.Log.Output = ioutil.Discard
+	cfg.Log.Output = io.Discard
 
 	clock := clockdog.New()
 
@@ -73,7 +73,7 @@ type benchmarkItem struct {
 	uri  string
 }
 
-// nolint:dupl // For performance.
+// For performance.
 func BenchmarkIntegration(b *testing.B) {
 	baseURL, services := intServices(context.Background())
 	defer func() {
@@ -98,10 +98,10 @@ func BenchmarkIntegration(b *testing.B) {
 
 			b.Run(bi.name, func(b *testing.B) {
 				httptestbench.RoundTrip(b, 50,
-					func(i int, req *fasthttp.Request) {
+					func(_ int, req *fasthttp.Request) {
 						req.SetRequestURI(requestURI)
 					},
-					func(i int, resp *fasthttp.Response) bool {
+					func(_ int, resp *fasthttp.Response) bool {
 						return resp.StatusCode() == http.StatusOK
 					},
 				)
@@ -135,40 +135,57 @@ func intServices(ctx context.Context) (string, *goservicing.ServiceGroup) {
 	return baseRESTURL, services
 }
 
-// getBenchmark benchmark for {/v1/}
+// getBenchmark benchmark for {/v1/}.
 func getBenchmark() []benchmarkItem {
-	//ctx := context.Background()
+	ctx := context.Background()
 
-	//cleanDatabase(ctx)
-	//
-	//data := nil
-	//
-	//loadDatabase(ctx, data)
+	cleanDatabase(ctx)
+
+	// Load sample data
+	// 200.106.141.15,SI,Nepal,DuBuquemouth,-84.87503094689836,7.206435933364332,7823011346
+	// 160.103.7.140,CZ,Nicaragua,New Neva,-68.31023296602508,-37.62435199624531,7301823115
+	// 70.95.73.73,TL,Saudi Arabia,Gradymouth,-49.16675918861615,-86.05920084416894,2559997162
+	data, err := helpers.LoadSampleData(3, 0)
+	if err != nil {
+		panic(err)
+	}
+
+	geos := make([]any, 0, len(data))
+
+	for _, d := range data {
+		geolocation, err := model.DecodeGeolocation(d)
+		if err != nil {
+			panic(err)
+		}
+
+		geos = append(geos, geolocation)
+	}
+
+	loadDatabase(ctx, geos)
 
 	return []benchmarkItem{
 		{
-			name: "SayHello",
-			uri:  "/",
+			name: "GeolocationByIPExposer",
+			uri:  "/v1/geolocations/200.106.141.15",
 		},
 	}
 }
 
-//
-//func cleanDatabase(ctx context.Context) {
-//	// Deleting from table
-//	_, err := deps.Storage.Exec(
-//		ctx,
-//		deps.Storage.DeleteStmt("table"),
-//	)
-//	must.NotFail(ctxd.WrapError(ctx, err, "failed cleaning table"))
-//}
-//
-//func loadDatabase(ctx context.Context, data interface{}) {
-//	for _, d := range data {
-//		_, err := deps.Storage.Exec(
-//			context.Background(),
-//			deps.Storage.InsertStmt("table", d),
-//		)
-//		must.NotFail(ctxd.WrapError(ctx, err, "failed loading", "data", d))
-//	}
-//}
+func cleanDatabase(ctx context.Context) {
+	// Deleting from table
+	_, err := deps.Storage.Exec(
+		ctx,
+		deps.Storage.DeleteStmt(storage.GeolocationTable),
+	)
+	must.NotFail(ctxd.WrapError(ctx, err, "failed cleaning table"))
+}
+
+func loadDatabase(ctx context.Context, data []any) {
+	for _, d := range data {
+		_, err := deps.Storage.Exec(
+			ctx,
+			deps.Storage.InsertStmt(storage.GeolocationTable, d),
+		)
+		must.NotFail(ctxd.WrapError(ctx, err, "failed loading", "data", d))
+	}
+}

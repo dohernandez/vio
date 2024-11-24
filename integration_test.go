@@ -3,7 +3,7 @@ package vio_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -15,11 +15,15 @@ import (
 	"github.com/cucumber/godog"
 	"github.com/dohernandez/goservicing"
 	"github.com/dohernandez/servers"
+	"github.com/dohernandez/vio/internal/domain/model"
 	"github.com/dohernandez/vio/internal/platform/app"
+	"github.com/dohernandez/vio/internal/platform/cli"
 	"github.com/dohernandez/vio/internal/platform/config"
+	stplatform "github.com/dohernandez/vio/internal/platform/storage"
 	"github.com/dohernandez/vio/pkg/must"
 	"github.com/dohernandez/vio/pkg/test/feature"
-	//dbdogcleaner "github.com/dohernandez/vio/pkg/test/feature/database"
+	fcli "github.com/dohernandez/vio/pkg/test/feature/cli"
+	dbdogcleaner "github.com/dohernandez/vio/pkg/test/feature/database"
 	"github.com/nhatthm/clockdog"
 )
 
@@ -37,7 +41,7 @@ func TestIntegration(t *testing.T) {
 	must.NotFail(ctxd.WrapError(ctx, err, "failed to load configurations"))
 
 	cfg.Environment = "test"
-	cfg.Log.Output = ioutil.Discard
+	cfg.Log.Output = io.Discard
 
 	clock := clockdog.New()
 
@@ -64,8 +68,8 @@ func TestIntegration(t *testing.T) {
 	)
 	must.NotFail(ctxd.WrapError(ctx, err, "failed to init service locator"))
 
-	//dbm := initDBManager(deps.Storage)
-	//dbmCleaner := initDBMCleaner(dbm)
+	dbm := initDBManager(deps.Storage)
+	dbmCleaner := initDBMCleaner(dbm)
 
 	services := goservicing.WithGracefulShutDown(
 		func(ctx context.Context) {
@@ -89,13 +93,18 @@ func TestIntegration(t *testing.T) {
 	baseRESTURL := <-deps.VioRESTService.AddrAssigned
 	local := httpdog.NewLocal(baseRESTURL)
 
+	fcliApp := fcli.App{}
+	fcliApp.Add("parse", cli.NewCliApp)
+
 	feature.RunFeatures(t, "features", func(_ *testing.T, s *godog.ScenarioContext) {
 		local.RegisterSteps(s)
 
-		//dbm.RegisterSteps(s)
-		//dbmCleaner.RegisterSteps(s)
+		dbm.RegisterSteps(s)
+		dbmCleaner.RegisterSteps(s)
 
 		clock.RegisterContext(s)
+
+		fcli.RegisterContext(s, &fcliApp)
 	})
 
 	must.NotFail(services.Close())
@@ -112,10 +121,7 @@ func initDBManager(storage *sqluct.Storage) *dbdog.Manager {
 		"postgres": {
 			Storage: storage,
 			Tables: map[string]interface{}{
-				// "table_name":  new(model.TableModel),
-			},
-			PostCleanup: map[string][]string{
-				// "table_name":  {"ALTER SEQUENCE table_name_id_seq RESTART"},
+				stplatform.GeolocationTable: new(model.Geolocation),
 			},
 		},
 	}
@@ -123,8 +129,8 @@ func initDBManager(storage *sqluct.Storage) *dbdog.Manager {
 	return &dbm
 }
 
-//func initDBMCleaner(dbm *dbdog.Manager) *dbdogcleaner.ManagerCleaner {
-//	return &dbdogcleaner.ManagerCleaner{
-//		Manager: dbm,
-//	}
-//}
+func initDBMCleaner(dbm *dbdog.Manager) *dbdogcleaner.ManagerCleaner {
+	return &dbdogcleaner.ManagerCleaner{
+		Manager: dbm,
+	}
+}

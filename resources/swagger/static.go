@@ -1,7 +1,10 @@
 package swagger
 
-import _ "embed"
+import (
+	_ "embed"
+)
 
-//go:embed service.swagger.json
 // SwgJSON contains the service.swagger.json definition.
+//
+//go:embed service.swagger.json
 var SwgJSON []byte

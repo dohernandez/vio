@@ -44,27 +44,36 @@ endif
 -include $(DEVGO_PATH)/makefiles/build.mk
 -include $(DEVGO_PATH)/makefiles/lint.mk
 -include $(DEVGO_PATH)/makefiles/test-unit.mk
--include $(DEVGO_PATH)/makefiles/test-integration.mk
 -include $(DEVGO_PATH)/makefiles/bench.mk
 -include $(DEVGO_PATH)/makefiles/reset-ci.mk
 
 # Add your custom targets here.
 BUILD_LDFLAGS="-s -w"
-BUILD_PKG = ./cmd/vio
+BUILD_PKG = ./cmd/...
+BINARY_NAME = viod
+
 INTEGRATION_DOCKER_COMPOSE = ./docker-compose.integration-test.yml
+DOCKER_COMPOSE = ./docker-compose.yml
 
 APP_PATH = $(shell pwd)
 APP_SCRIPTS = $(APP_PATH)/resources/app/scripts
+
+-include $(APP_PATH)/resources/app/makefiles/test-integration.mk
+-include $(APP_PATH)/resources/app/makefiles/database.mk
+-include $(APP_PATH)/resources/app/makefiles/dep.mk
+
+
 SRC_PROTO_PATH = $(APP_PATH)/resources/proto
 GO_PROTO_PATH = $(APP_PATH)/pkg/proto
 SWAGGER_PATH = $(APP_PATH)/resources/swagger
 
--include $(APP_PATH)/resources/app/makefiles/database.mk
--include $(APP_PATH)/resources/app/makefiles/dep.mk
 -include $(DEVGRPCGO_PATH)/makefiles/protoc.mk
 
 ## Run tests
 test: test-unit test-integration
+
+## Check the commit compile and test the change.
+check: lint test
 
 ## Generate code from proto file(s)
 proto-gen: proto-gen-code-swagger
@@ -78,3 +87,14 @@ bench-integration:
 	@$(GO) test -tags bench -bench=. -count=5 -benchtime=20000x -run=^a  benchmark_test.go | tee /dev/tty >bench-$(shell git symbolic-ref HEAD --short | tr / - 2>/dev/null).txt
 	@test -s $(GOPATH)/bin/benchstat || GO111MODULE=off GOFLAGS= GOBIN=$(GOPATH)/bin $(GO) get -u golang.org/x/perf/cmd/benchstat
 	@benchstat bench-$(shell git symbolic-ref HEAD --short | tr / - 2>/dev/null).txt
+
+## Start local via docker-compose up
+start-dc:
+	@docker-compose -p "$(shell basename $$PWD)" -f $(DOCKER_COMPOSE) up -d
+
+## Stop local via docker-compose down
+stop-dc:
+	@docker-compose -p "$(shell basename $$PWD)" -f $(DOCKER_COMPOSE) down
+
+
+.PHONY: test check proto-gen bench-integration start-dc stop-deps

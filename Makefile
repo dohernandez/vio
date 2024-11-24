@@ -44,7 +44,6 @@ endif
 -include $(DEVGO_PATH)/makefiles/build.mk
 -include $(DEVGO_PATH)/makefiles/lint.mk
 -include $(DEVGO_PATH)/makefiles/test-unit.mk
--include $(DEVGO_PATH)/makefiles/bench.mk
 -include $(DEVGO_PATH)/makefiles/reset-ci.mk
 
 # Add your custom targets here.
@@ -59,6 +58,7 @@ APP_PATH = $(shell pwd)
 APP_SCRIPTS = $(APP_PATH)/resources/app/scripts
 
 -include $(APP_PATH)/resources/app/makefiles/test-integration.mk
+-include $(APP_PATH)/resources/app/makefiles/bench.mk
 -include $(APP_PATH)/resources/app/makefiles/database.mk
 -include $(APP_PATH)/resources/app/makefiles/dep.mk
 

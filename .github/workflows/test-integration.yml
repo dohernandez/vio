@@ -66,7 +66,7 @@ jobs:
       - name: Run test for base code
         if: env.RUN_BASE_COVERAGE == 'on' && steps.base-coverage.outputs.cache-hit != 'true' && github.event.pull_request.base.sha != ''
         run: |
-          git fetch origin master ${{ github.event.pull_request.base.sha }}
+          git fetch origin main ${{ github.event.pull_request.base.sha }}
           HEAD=$(git rev-parse HEAD)
           git reset --hard ${{ github.event.pull_request.base.sha }}
           (make test-integration && go tool cover -func=./integration.coverprofile > integration-base.txt) || echo "No test-integration in base"
@@ -88,7 +88,7 @@ jobs:
           curl -sLO https://github.com/vearutop/gocovdiff/releases/download/v1.4.2/linux_amd64.tar.gz && tar xf linux_amd64.tar.gz && rm linux_amd64.tar.gz
           gocovdiff_hash=$(git hash-object ./gocovdiff)
           [ "$gocovdiff_hash" == "c37862c73a677e5a9c069470287823ab5bbf0244" ] || (echo "::error::unexpected hash for gocovdiff, possible tampering: $gocovdiff_hash" && exit 1)
-          git fetch origin master ${{ github.event.pull_request.base.sha }}
+          git fetch origin main ${{ github.event.pull_request.base.sha }}
           REP=$(./gocovdiff -cov integration.coverprofile -gha-annotations gha-integration.txt -delta-cov-file delta-cov-integration.txt -target-delta-cov ${TARGET_DELTA_COV})
           echo "${REP}"
           cat gha-integration.txt

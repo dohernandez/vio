@@ -78,6 +78,7 @@ jobs:
 
       - name: Run benchmark
         run: |
+          make start-deps
           export REF_NAME=new
           make bench
           OUTPUT=$(make bench-stat-diff)

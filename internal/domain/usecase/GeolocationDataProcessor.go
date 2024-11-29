@@ -10,6 +10,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const batchBuffer = 500
+
 //go:generate mockery --name=GeolocationDataReader --outpkg=mocks --output=mocks --filename=geolocation_data_reader.go --with-expecter
 
 // GeolocationDataReader is the interface that provides the ability to read geolocation data.
@@ -22,7 +24,7 @@ type GeolocationDataReader interface {
 
 // GeolocationDataStorage is the interface that provides the ability to save geolocation data.
 type GeolocationDataStorage interface {
-	SaveGeolocation(ctx context.Context, geo model.Geolocation) error
+	SaveGeolocation(ctx context.Context, geo []*model.Geolocation) error
 }
 
 // GeolocationDataProcessor processes the geolocation data.
@@ -41,6 +43,8 @@ func NewParseGeolocationData(storage GeolocationDataStorage, logger ctxd.Logger)
 }
 
 // Process processes the geolocation data from the given reader in parallel.
+//
+//nolint:funlen
 func (p *GeolocationDataProcessor) Process(ctx context.Context, reader GeolocationDataReader, inParallel uint) error {
 	startTime := time.Now()
 
@@ -53,7 +57,12 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 
 	report := &reporter{}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, ctxt := errgroup.WithContext(ctx)
+
+	var (
+		geos = make([]*model.Geolocation, 0, batchBuffer)
+		sm   sync.Mutex
+	)
 
 	for range inParallel {
 		eg.Go(func() error {
@@ -62,7 +71,7 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 				if err != nil {
 					report.failed(err)
 
-					p.logger.Debug(ctx, "failed to decode geolocation data", "error", err)
+					p.logger.Debug(ctxt, "failed to decode geolocation data", "error", err)
 
 					continue
 				}
@@ -71,22 +80,35 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 				if err = geo.IsValid(); err != nil { //nolint:contextcheck
 					report.failed(err)
 
-					p.logger.Debug(ctx, "invalid geolocation data", "error", err)
-
-					continue
-				}
-
-				if err := p.storage.SaveGeolocation(ctx, geo); err != nil {
-					report.failed(err)
-
-					p.logger.Debug(ctx, "failed to save geolocation data", "error", err)
+					p.logger.Debug(ctxt, "invalid geolocation data", "error", err)
 
 					continue
 				}
 
 				report.succeed()
 
-				p.logger.Debug(ctx, "geolocation data saved", "geolocation", geo)
+				sm.Lock()
+				geos = append(geos, &geo)
+
+				if len(geos) < batchBuffer {
+					sm.Unlock()
+
+					continue
+				}
+
+				if err := p.storage.SaveGeolocation(ctxt, geos); err != nil {
+					report.failed(err)
+
+					p.logger.Debug(ctxt, "failed to save geolocation data", "error", err)
+
+					continue
+				}
+
+				p.logger.Debug(ctxt, "geolocation data saved", "geolocation", len(geos))
+
+				geos = make([]*model.Geolocation, 0, batchBuffer)
+
+				sm.Unlock()
 			}
 
 			return nil
@@ -95,10 +117,10 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 
 	for d := range data {
 		select {
-		case <-ctx.Done():
+		case <-ctxt.Done():
 			close(buf)
 
-			return ctx.Err()
+			return ctxt.Err()
 		case buf <- d:
 		}
 	}
@@ -106,7 +128,15 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 	close(buf)
 
 	if err := eg.Wait(); err != nil {
-		return ctxd.NewError(context.Background(), "processing geolocation data", "error", err) //nolint:contextcheck
+		return ctxd.NewError(ctx, "processing geolocation data", "error", err)
+	}
+
+	if len(geos) > 0 {
+		if err := p.storage.SaveGeolocation(ctx, geos); err != nil {
+			report.failed(err)
+
+			p.logger.Debug(ctxt, "failed to save geolocation data", "error", err)
+		}
 	}
 
 	endTime := time.Since(startTime)

@@ -96,5 +96,15 @@ start-dc:
 stop-dc:
 	@docker-compose -p "$(shell basename $$PWD)" -f $(DOCKER_COMPOSE) down
 
+## Testing local via docker-compose up
+test-dc:
+	@echo ">> spinning up test data locally using sample data from resources/sample_data/data_dump.csv"
+	@make start-dc
+	@make build
+	@ENV_PATH=.env.integration-test bash ./resources/app/scripts/env-run.sh ./bin/vio parse filesystem --file ./resources/sample_data/data_dump.csv -p 200 -v
+	@echo ">> api ready: http://localhost:8080/"
+	@echo ">> api documentation: http://localhost:8080/docs"
+	@echo ">> to stop the test data run 'make stop-dc'"
+
 
 .PHONY: test check proto-gen bench-integration start-dc stop-deps

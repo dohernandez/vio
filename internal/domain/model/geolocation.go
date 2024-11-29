@@ -17,7 +17,8 @@ const (
 // Geolocation errors.
 var (
 	// ErrGeolocationNotFound is returned when a geolocation is not found.
-	ErrGeolocationNotFound = errors.New("geolocation not found")
+	ErrGeolocationNotFound      = errors.New("geolocation not found")
+	ErrGeolocationAlreadyExists = errors.New("geolocation already exists")
 )
 
 // Geolocation represents a geolocation entity.

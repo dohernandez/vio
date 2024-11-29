@@ -44,7 +44,7 @@ func NewParseGeolocationData(storage GeolocationDataStorage, logger ctxd.Logger)
 
 // Process processes the geolocation data from the given reader in parallel.
 //
-//nolint:funlen
+//nolint:funlen,gocognit
 func (p *GeolocationDataProcessor) Process(ctx context.Context, reader GeolocationDataReader, inParallel uint) error {
 	startTime := time.Now()
 
@@ -60,8 +60,8 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 	eg, ctxt := errgroup.WithContext(ctx)
 
 	var (
-		geos = make([]*model.Geolocation, 0, batchBuffer)
-		sm   sync.Mutex
+		batch = &geoBatch{}
+		sm    sync.Mutex
 	)
 
 	for range inParallel {
@@ -85,18 +85,29 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 					continue
 				}
 
+				sm.Lock()
+
+				if err = batch.add(&geo); err != nil {
+					sm.Unlock()
+
+					report.failed(err)
+
+					p.logger.Debug(ctxt, "failed to add geolocation data to batch", "error", err)
+
+					continue
+				}
+
 				report.succeed()
 
-				sm.Lock()
-				geos = append(geos, &geo)
+				size := batch.len()
 
-				if len(geos) < batchBuffer {
+				if size < batchBuffer {
 					sm.Unlock()
 
 					continue
 				}
 
-				if err := p.storage.SaveGeolocation(ctxt, geos); err != nil {
+				if err := p.storage.SaveGeolocation(ctxt, batch.get()); err != nil {
 					report.failed(err)
 
 					p.logger.Debug(ctxt, "failed to save geolocation data", "error", err)
@@ -104,9 +115,9 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 					continue
 				}
 
-				p.logger.Debug(ctxt, "geolocation data saved", "geolocation", len(geos))
+				p.logger.Debug(ctxt, "geolocation data saved", "geolocation", size)
 
-				geos = make([]*model.Geolocation, 0, batchBuffer)
+				batch.reset()
 
 				sm.Unlock()
 			}
@@ -131,8 +142,8 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 		return ctxd.NewError(ctx, "processing geolocation data", "error", err)
 	}
 
-	if len(geos) > 0 {
-		if err := p.storage.SaveGeolocation(ctx, geos); err != nil {
+	if batch.len() > 0 {
+		if err := p.storage.SaveGeolocation(ctx, batch.get()); err != nil {
 			report.failed(err)
 
 			p.logger.Debug(ctxt, "failed to save geolocation data", "error", err)
@@ -180,4 +191,40 @@ func (r *reporter) failed(err error) {
 	errMsg := err.Error()
 
 	r.discardedReasons[errMsg]++
+}
+
+// geoBatch is a buffer for geolocation data.
+// goeBatch is not thread-safe, therefore it should be protected by a mutex when used in a concurrent environment.
+type geoBatch struct {
+	goes []*model.Geolocation
+
+	uniqueness map[string]bool
+}
+
+func (b *geoBatch) add(geo *model.Geolocation) error {
+	if b.uniqueness == nil {
+		b.uniqueness = make(map[string]bool)
+	}
+
+	if _, ok := b.uniqueness[geo.IPAddress]; ok {
+		return model.ErrGeolocationAlreadyExists
+	}
+
+	b.uniqueness[geo.IPAddress] = true
+
+	b.goes = append(b.goes, geo)
+
+	return nil
+}
+
+func (b *geoBatch) len() int {
+	return len(b.goes)
+}
+
+func (b *geoBatch) reset() {
+	b.goes = make([]*model.Geolocation, 0, batchBuffer)
+}
+
+func (b *geoBatch) get() []*model.Geolocation {
+	return b.goes
 }

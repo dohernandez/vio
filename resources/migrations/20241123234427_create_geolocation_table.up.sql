@@ -13,4 +13,4 @@ CREATE TABLE IF NOT EXISTS "geolocation" (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX geolocation_ip_address_idx ON geolocation(ip_address);
+CREATE INDEX geolocation_ip_address_idx ON geolocation(ip_address);

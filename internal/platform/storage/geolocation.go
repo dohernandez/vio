@@ -32,10 +32,10 @@ func NewGeolocation(storage *sqluct.Storage) *Geolocation {
 }
 
 // SaveGeolocation store the geolocation data.
-func (s *Geolocation) SaveGeolocation(ctx context.Context, geo model.Geolocation) error {
+func (s *Geolocation) SaveGeolocation(ctx context.Context, geos []*model.Geolocation) error {
 	errMsg := "storage.Geolocation: failed to save Geolocation"
 
-	q := s.storage.InsertStmt(GeolocationTable, geo)
+	q := s.storage.InsertStmt(GeolocationTable, geos)
 
 	_, err := s.storage.Exec(ctx, q)
 	if err == nil {

@@ -23,7 +23,7 @@ func (_m *GeolocationDataStorage) EXPECT() *GeolocationDataStorage_Expecter {
 }
 
 // SaveGeolocation provides a mock function with given fields: ctx, geo
-func (_m *GeolocationDataStorage) SaveGeolocation(ctx context.Context, geo model.Geolocation) error {
+func (_m *GeolocationDataStorage) SaveGeolocation(ctx context.Context, geo []*model.Geolocation) error {
 	ret := _m.Called(ctx, geo)
 
 	if len(ret) == 0 {
@@ -31,7 +31,7 @@ func (_m *GeolocationDataStorage) SaveGeolocation(ctx context.Context, geo model
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, model.Geolocation) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, []*model.Geolocation) error); ok {
 		r0 = rf(ctx, geo)
 	} else {
 		r0 = ret.Error(0)
@@ -47,14 +47,14 @@ type GeolocationDataStorage_SaveGeolocation_Call struct {
 
 // SaveGeolocation is a helper method to define mock.On call
 //   - ctx context.Context
-//   - geo model.Geolocation
+//   - geo []*model.Geolocation
 func (_e *GeolocationDataStorage_Expecter) SaveGeolocation(ctx interface{}, geo interface{}) *GeolocationDataStorage_SaveGeolocation_Call {
 	return &GeolocationDataStorage_SaveGeolocation_Call{Call: _e.mock.On("SaveGeolocation", ctx, geo)}
 }
 
-func (_c *GeolocationDataStorage_SaveGeolocation_Call) Run(run func(ctx context.Context, geo model.Geolocation)) *GeolocationDataStorage_SaveGeolocation_Call {
+func (_c *GeolocationDataStorage_SaveGeolocation_Call) Run(run func(ctx context.Context, geo []*model.Geolocation)) *GeolocationDataStorage_SaveGeolocation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(model.Geolocation))
+		run(args[0].(context.Context), args[1].([]*model.Geolocation))
 	})
 	return _c
 }
@@ -64,7 +64,7 @@ func (_c *GeolocationDataStorage_SaveGeolocation_Call) Return(_a0 error) *Geoloc
 	return _c
 }
 
-func (_c *GeolocationDataStorage_SaveGeolocation_Call) RunAndReturn(run func(context.Context, model.Geolocation) error) *GeolocationDataStorage_SaveGeolocation_Call {
+func (_c *GeolocationDataStorage_SaveGeolocation_Call) RunAndReturn(run func(context.Context, []*model.Geolocation) error) *GeolocationDataStorage_SaveGeolocation_Call {
 	_c.Call.Return(run)
 	return _c
 }

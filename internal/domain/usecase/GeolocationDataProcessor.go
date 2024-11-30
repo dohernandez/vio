@@ -43,8 +43,6 @@ func NewParseGeolocationData(storage GeolocationDataStorage, logger ctxd.Logger)
 }
 
 // Process processes the geolocation data from the given reader in parallel.
-//
-//nolint:funlen,gocognit
 func (p *GeolocationDataProcessor) Process(ctx context.Context, reader GeolocationDataReader, inParallel uint) error {
 	startTime := time.Now()
 
@@ -53,101 +51,67 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 		return err
 	}
 
-	buf := make(chan []string, inParallel)
-
-	report := &reporter{}
-
-	eg, ctxt := errgroup.WithContext(ctx)
+	eg, egctx := errgroup.WithContext(ctx)
 
 	var (
-		batch = &geoBatch{}
-		sm    sync.Mutex
+		report = &reporter{
+			eg: eg,
+		}
+		dupl = &duplication{}
+
+		processWorker = inParallel
+		saverWorker   = 15
+		// ready is a channel to send geolocation data to be saved.
+		// The buffer size is twice the number of saver workers.
+		// This is to ensure that the processor worker can continue to process the data while the saver worker(s) is/are
+		// still saving the data.
+		ready = make(chan *model.Geolocation, batchBuffer*saverWorker*2)
 	)
 
-	for range inParallel {
-		eg.Go(func() error {
-			for d := range buf {
-				geo, err := model.DecodeGeolocation(d) //nolint:contextcheck
-				if err != nil {
-					report.failed(err)
+	// Start the saver worker(s).
+	eg.Go(func() error {
+		var wg sync.WaitGroup
 
-					p.logger.Debug(ctxt, "failed to decode geolocation data", "error", err)
+		for range saverWorker {
+			wg.Add(1)
 
-					continue
-				}
+			go func() {
+				defer wg.Done()
 
-				// Validate geolocation data before saving.
-				if err = geo.IsValid(); err != nil { //nolint:contextcheck
-					report.failed(err)
-
-					p.logger.Debug(ctxt, "invalid geolocation data", "error", err)
-
-					continue
-				}
-
-				sm.Lock()
-
-				if err = batch.add(&geo); err != nil {
-					sm.Unlock()
-
-					report.failed(err)
-
-					p.logger.Debug(ctxt, "failed to add geolocation data to batch", "error", err)
-
-					continue
-				}
-
-				report.succeed()
-
-				size := batch.len()
-
-				if size < batchBuffer {
-					sm.Unlock()
-
-					continue
-				}
-
-				if err := p.storage.SaveGeolocation(ctxt, batch.get()); err != nil {
-					report.failed(err)
-
-					p.logger.Debug(ctxt, "failed to save geolocation data", "error", err)
-
-					continue
-				}
-
-				p.logger.Debug(ctxt, "geolocation data saved", "geolocation", size)
-
-				batch.reset()
-
-				sm.Unlock()
-			}
-
-			return nil
-		})
-	}
-
-	for d := range data {
-		select {
-		case <-ctxt.Done():
-			close(buf)
-
-			return ctxt.Err()
-		case buf <- d:
+				p.save(egctx, ready, report)
+			}()
 		}
-	}
 
-	close(buf)
+		wg.Wait()
+
+		return nil
+	})
+
+	// Start the processor worker(s).
+	eg.Go(func() error {
+		defer func() {
+			close(ready)
+		}()
+
+		var wg sync.WaitGroup
+
+		for range processWorker {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				p.process(egctx, data, ready, dupl, report)
+			}()
+		}
+
+		wg.Wait()
+
+		return nil
+	})
 
 	if err := eg.Wait(); err != nil {
 		return ctxd.NewError(ctx, "processing geolocation data", "error", err)
-	}
-
-	if batch.len() > 0 {
-		if err := p.storage.SaveGeolocation(ctx, batch.get()); err != nil {
-			report.failed(err)
-
-			p.logger.Debug(ctxt, "failed to save geolocation data", "error", err)
-		}
 	}
 
 	endTime := time.Since(startTime)
@@ -162,69 +126,172 @@ func (p *GeolocationDataProcessor) Process(ctx context.Context, reader Geolocati
 	return nil
 }
 
+func (p *GeolocationDataProcessor) process(
+	ctx context.Context,
+	data <-chan []string,
+	ready chan<- *model.Geolocation,
+	dupl *duplication,
+	r *reporter,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case d, ok := <-data:
+			if !ok {
+				return
+			}
+
+			geo, err := model.DecodeGeolocation(d) //nolint:contextcheck
+			if err != nil {
+				r.failed(err)
+
+				p.logger.Debug(ctx, "decode geolocation data", "error", err)
+
+				continue
+			}
+
+			// Validate geolocation data before saving.
+			if err = geo.IsValid(); err != nil { //nolint:contextcheck
+				r.failed(err)
+
+				p.logger.Debug(ctx, "invalid geolocation data", "error", err)
+
+				continue
+			}
+
+			err = dupl.check(&geo)
+			if err != nil {
+				r.failed(err)
+
+				p.logger.Debug(ctx, "geolocation data exists", "error", err)
+
+				continue
+			}
+
+			ready <- &geo
+		}
+	}
+}
+
+func (p *GeolocationDataProcessor) save(
+	ctx context.Context,
+	ready <-chan *model.Geolocation,
+	r *reporter,
+) {
+	buf := make([]*model.Geolocation, 0, batchBuffer)
+
+	defer func() {
+		if len(buf) == 0 {
+			return
+		}
+
+		if err := p.storage.SaveGeolocation(ctx, buf); err != nil {
+			r.failed(err)
+
+			p.logger.Debug(ctx, "save geolocation data", "error", err)
+
+			return
+		}
+
+		r.succeed(len(buf))
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case geo, ok := <-ready:
+			if !ok {
+				return
+			}
+
+			buf = append(buf, geo)
+
+			if len(buf) < batchBuffer {
+				continue
+			}
+		}
+
+		if err := p.storage.SaveGeolocation(ctx, buf); err != nil {
+			r.failed(err)
+
+			p.logger.Debug(ctx, "save geolocation data", "error", err)
+
+			continue
+		}
+
+		r.succeed(len(buf))
+
+		// Reset buffer
+		buf = make([]*model.Geolocation, 0, batchBuffer)
+	}
+}
+
+// reporter is a helper to report the processing result.
 type reporter struct {
 	accepted         int
 	discarded        int
 	discardedReasons map[string]uint
 
+	// eg...
+	eg *errgroup.Group
+
 	smA sync.Mutex
 	smD sync.Mutex
 }
 
-func (r *reporter) succeed() {
-	r.smA.Lock()
-	defer r.smA.Unlock()
+func (r *reporter) succeed(a int) {
+	r.eg.Go(func() error {
+		r.smA.Lock()
+		defer r.smA.Unlock()
 
-	r.accepted++
+		r.accepted += a
+
+		return nil
+	})
 }
 
 func (r *reporter) failed(err error) {
-	r.smD.Lock()
-	defer r.smD.Unlock()
+	r.eg.Go(func() error {
+		r.smD.Lock()
+		defer r.smD.Unlock()
 
-	r.discarded++
+		r.discarded++
 
-	if r.discardedReasons == nil {
-		r.discardedReasons = make(map[string]uint)
-	}
+		if r.discardedReasons == nil {
+			r.discardedReasons = make(map[string]uint)
+		}
 
-	errMsg := err.Error()
+		errMsg := err.Error()
 
-	r.discardedReasons[errMsg]++
+		r.discardedReasons[errMsg]++
+
+		return nil
+	})
 }
 
-// geoBatch is a buffer for geolocation data.
-// goeBatch is not thread-safe, therefore it should be protected by a mutex when used in a concurrent environment.
-type geoBatch struct {
-	goes []*model.Geolocation
-
+// duplication is a helper to check the duplication of geolocation data loaded.
+// It keeps the uniqueness of the geolocation data by IP address.
+type duplication struct {
 	uniqueness map[string]bool
+
+	sm sync.Mutex
 }
 
-func (b *geoBatch) add(geo *model.Geolocation) error {
-	if b.uniqueness == nil {
-		b.uniqueness = make(map[string]bool)
+func (d *duplication) check(geo *model.Geolocation) error {
+	d.sm.Lock()
+	defer d.sm.Unlock()
+
+	if d.uniqueness == nil {
+		d.uniqueness = make(map[string]bool)
 	}
 
-	if _, ok := b.uniqueness[geo.IPAddress]; ok {
+	if _, ok := d.uniqueness[geo.IPAddress]; ok {
 		return model.ErrGeolocationAlreadyExists
 	}
 
-	b.uniqueness[geo.IPAddress] = true
-
-	b.goes = append(b.goes, geo)
+	d.uniqueness[geo.IPAddress] = true
 
 	return nil
-}
-
-func (b *geoBatch) len() int {
-	return len(b.goes)
-}
-
-func (b *geoBatch) reset() {
-	b.goes = make([]*model.Geolocation, 0, batchBuffer)
-}
-
-func (b *geoBatch) get() []*model.Geolocation {
-	return b.goes
 }

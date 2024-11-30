@@ -36,7 +36,7 @@ func TestGeolocationDataProcessor_Process_all_success(t *testing.T) {
 
 	// storage
 	storage := mocks.NewGeolocationDataStorage(t)
-	storage.EXPECT().SaveGeolocation(mock.Anything, mock.AnythingOfType(reflect.TypeOf(make([]*model.Geolocation, 0, 3)).String())).Return(nil).Once()
+	storage.EXPECT().SaveGeolocation(mock.Anything, mock.AnythingOfType(reflect.TypeOf([]*model.Geolocation{}).String())).Return(nil)
 
 	logger := &ctxd.LoggerMock{}
 
